@@ -14,9 +14,10 @@ import requests
 
 
 def get_coin_list():
-    # basicly the same code from your last program
+    # basically the same code from your last program
     session = requests.Session()
-    session.headers.update({'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'})
+    session.headers.update(
+        {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'})
     r = session.get('https://coinmarketcap.com/coins/views/all/')
     bs = BeautifulSoup(r.content, 'html.parser')        
     coin_table = bs.find('table', attrs={'id': 'currencies-all'})
@@ -36,10 +37,10 @@ def get_coin_list():
         links_to_coins.append(link_to_coin)
         #  We add the scraped link to the links_to_coins list,
         #  and then the 'for' loop continues onto the next row.
-        coins = [x.split('/')[-2:-1] for x in links_to_coins]
-        # We split the url into a list to get the specific coin name
-        coins = [x[0] for x in coins]
-        # combine conbime the list of list into a list of strings
+    coins = [x.split('/')[-2:-1] for x in links_to_coins]
+    # We split the url into a list to get the specific coin name
+    coins = [x[0] for x in coins]
+    # combine combine the list of list into a list of strings
     return coins
 
 
@@ -76,27 +77,27 @@ def get_coin_exchange_data(coin):
 
 def update_data(coin_list):
     """
-    Load all the data for each coin into a single dataframe for historical and exchange data
+    Load all the data for each coin into a single DataFrame for historical and exchange data
     input should be a list of coins. 
     - This means you can use 'get_coin_list()' as input or 
     - a single coin ['bitcoin'] or 
     - a list of coins ['bitcoin', 'ethereum']
     
-    The resulting file and dataframe will be the input coins
+    The resulting file and DataFrame will be the input coins
     
     This uses the python "list comprehension" construct.
     See youtube for more details:
     https://youtu.be/1HlyKKiGg-4
     """
-#     coins = coins[:2]
-    historical_df = pd.concat([get_coin_historical_data(x) for x in coins])
-    exchange_df = pd.concat([get_coin_exchange_data(x) for x in coins])
+    #coin_list = coin_list[:2]
+    historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
+    exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
     return historical_df, exchange_df
 
 
 def save_df_to_filesystem(historical_df, exchange_df):
     """
-    save dataframe to filesystem using a python 'Pickled" object
+    save DataFrame to filesystem using a python 'Pickled" object
     this can be changed to a csv:
     - exchange_df.to_csv('exchange_data.csv')
     or an excel file
@@ -108,8 +109,8 @@ def save_df_to_filesystem(historical_df, exchange_df):
     
 def read_df_from_filesystem():
     """
-    read data from pickled object on filesystem into dataframes and return the
-    dataframes to the filesystem
+    read data from pickled object on filesystem into DataFrames and return the
+    DataFrames to the filesystem
     """
     exchange_df = pd.read_pickle('exchange_data.pkl')
     historical_df = pd.read_pickle('historical_data.pkl')
@@ -139,6 +140,7 @@ def startup():
         save_df_to_filesystem(historical_df, exchange_df)
         print('New data has been loaded into DataFrames and saved to filesystem.')
     return historical_df, exchange_df
+
 
 def shutdown(historical_df, exchange_df):
     # As the final step, save data to filesystem
