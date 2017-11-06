@@ -14,6 +14,13 @@ import requests
 
 
 def get_coin_list():
+    # consider reproducing with lxml
+    # - Faster
+    # - Cleaner Code
+    # - Use xpath
+    # <a class="currency-name-container" href="/currencies/bitcoin/">Bitcoin</a>
+    # xpath('//a[@class="currency-name-container"]/@href
+    #
     # basically the same code from your last program
     session = requests.Session()
     session.headers.update(
