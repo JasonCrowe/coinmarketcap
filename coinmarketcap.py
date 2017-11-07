@@ -71,6 +71,7 @@ def get_coin_historical_data(coin):
         df['download_date'] = datetime.now().date()
         return df
     except:
+        print('Error downloading {}, trying again'.format(coin))
         get_coin_historical_data(coin)
 
 
@@ -90,6 +91,7 @@ def get_coin_exchange_data(coin):
         df['download_date'] = datetime.now().date()
         return df
     except:
+        print('Error downloading {}, trying again'.format(coin))
         get_coin_exchange_data(coin)
 
 
@@ -109,6 +111,7 @@ def update_data(coin_list):
     """
     # coin_list = coin_list[:2]
     historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
+    # Set the date as a datetime object
     historical_df['Date'] = pd.to_datetime(historical_df['Date'], format='%b %d, %Y')
     exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
     return historical_df, exchange_df
@@ -228,22 +231,22 @@ bitcoin_historical_data.to_pickle('bitcoin_with_kelly_index.pkl')
 
 # print results
 print(bitcoin_historical_data)
-###########################################
+#######################################
 
-################################
-# Selecting data and exchanges #
-################################
+#######################################
+#    Selecting data and exchanges     #
+#######################################
 # Filter coin historical dataframe for 'bitcoin' coin
 bitcoin_historical_data = historical_df[historical_df['Coin'] == 'bitcoin']
-print 'print bitcoin_historical_data'
-print bitcoin_historical_data
+print('print bitcoin_historical_data')
+print(bitcoin_historical_data)
 
 # Filter coin/exchange dataframe for 'bitfinex' exchange
 bitfinex_exchange_coins = exchange_df[exchange_df['Source'] == 'bitfinex']
-print 'print bitfinex_exchange_coins'
-print bitfinex_exchange_coins
+print('print bitfinex_exchange_coins')
+print(bitfinex_exchange_coins)
 
 # Filter coin/exchange dataframe for 'bitcoin' coin
 bitcoin_exchanges = exchange_df[exchange_df['Coin'] == 'bitcoin']
-print 'print bitcoin_exchanges'
-print bitcoin_exchanges
+print('print bitcoin_exchanges')
+print(bitcoin_exchanges)
