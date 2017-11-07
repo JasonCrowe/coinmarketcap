@@ -1,8 +1,8 @@
 import pandas as pd
 # pandas library is everything you should need to analyse data
-# see youtube: 
+# see youtube:
 # - https://youtu.be/-NR-ynQg0YM
-# youtube for stock market analysis: 
+# youtube for stock market analysis:
 # - https://www.youtube.com/results?search_query=pandas+stock+market+data
 from datetime import datetime
 # to check the date and see if info is old
@@ -10,6 +10,8 @@ from time import strftime, gmtime
 # to check the date and see if info is old
 from bs4 import BeautifulSoup
 import requests
+
+
 # bs4 and request to get the url of all the coins
 
 
@@ -24,9 +26,10 @@ def get_coin_list():
     # basically the same code from your last program
     session = requests.Session()
     session.headers.update(
-        {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'})
+        {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'})
     r = session.get('https://coinmarketcap.com/coins/views/all/')
-    bs = BeautifulSoup(r.content, 'html.parser')        
+    bs = BeautifulSoup(r.content, 'html.parser')
     coin_table = bs.find('table', attrs={'id': 'currencies-all'})
     #  Got it!  Now, we're going to search for all that table's tr HTML
     #  tags.  tr stand for "table row", so let's call them rows.
@@ -57,15 +60,20 @@ def get_coin_historical_data(coin):
     download the table with pandas and store it into a dataframe
     add the 'Coin' name to the table
     add the 'download_date' to the table
+
     """
-    history_url = 'https://coinmarketcap.com/currencies/{}/historical-data/?start=20000101&end=21000101'.format(coin.lower())
+    history_url = 'https://coinmarketcap.com/currencies/{}/historical-data/?start=20000101&end=21000101'.format(
+        coin.lower())
     print('{}: Downloading coin historical data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
-    df = pd.read_html(history_url)[0]
-    df['Coin'] = coin
-    df['download_date'] = datetime.now().date()
-    return df
-  
-    
+    try:
+        df = pd.read_html(history_url)[0]
+        df['Coin'] = coin
+        df['download_date'] = datetime.now().date()
+        return df
+    except:
+        get_coin_historical_data(coin)
+
+
 def get_coin_exchange_data(coin):
     """
     Build the url from the coin input.
@@ -75,29 +83,33 @@ def get_coin_exchange_data(coin):
     """
     market_url = 'https://coinmarketcap.com/currencies/{}/#markets'.format(coin.lower())
     print('{}: Downloading coin exchange data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
-    df = pd.read_html(market_url)
-    df = df[0]
-    df['Coin'] = coin
-    df['download_date'] = datetime.now().date()
-    return df
+    try:
+        df = pd.read_html(market_url)
+        df = df[0]
+        df['Coin'] = coin
+        df['download_date'] = datetime.now().date()
+        return df
+    except:
+        get_coin_exchange_data(coin)
 
 
 def update_data(coin_list):
     """
     Load all the data for each coin into a single DataFrame for historical and exchange data
-    input should be a list of coins. 
-    - This means you can use 'get_coin_list()' as input or 
-    - a single coin ['bitcoin'] or 
+    input should be a list of coins.
+    - This means you can use 'get_coin_list()' as input or
+    - a single coin ['bitcoin'] or
     - a list of coins ['bitcoin', 'ethereum']
-    
+
     The resulting file and DataFrame will be the input coins
-    
+
     This uses the python "list comprehension" construct.
     See youtube for more details:
     https://youtu.be/1HlyKKiGg-4
     """
-    #coin_list = coin_list[:2]
+    coin_list = coin_list[:2]
     historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
+    historical_df['Date'] = pd.to_datetime(historical_df['Date'], format='%b %d, %Y')
     exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
     return historical_df, exchange_df
 
@@ -112,8 +124,8 @@ def save_df_to_filesystem(historical_df, exchange_df):
     """
     exchange_df.to_pickle('exchange_data.pkl')
     historical_df.to_pickle('historical_data.pkl')
-    
-    
+
+
 def read_df_from_filesystem():
     """
     read data from pickled object on filesystem into DataFrames and return the
@@ -134,9 +146,11 @@ def startup():
         historical_df, exchange_df = update_data(get_coin_list())
         print('Data update complete, writing to filesystem')
         save_df_to_filesystem(historical_df, exchange_df)
-    finally:
-        # after we either download or pull from file we need to find the downloaded date
+
+    try:
         downloaded_on = historical_df['download_date'].max()
+    except:
+        print('Date not found in data.')
 
     if raw_input('Data was last downloaded on {}.\nUpdate Data? y/n: '.format(downloaded_on)) == 'y':
         # download and save if "y"
@@ -154,15 +168,71 @@ def shutdown(historical_df, exchange_df):
     # this isn't really needed, but I want you to know how to save data after analysis
     save_df_to_filesystem(historical_df, exchange_df)
 
-    
-#######################################
-# Seperation of functions and program #
-#######################################
+
+def KellyList(data):
+    if len(data) < 2: return []
+    KellyList = [0.0]
+    NumberPositives = NumberNegatives = posDelta = negDelta = AverageRaise = AverageDrop = 0.0
+
+    for t in xrange(len(data) - 1):
+        oldValue = data[t]
+        newValue = data[t + 1]
+        diff = newValue - oldValue
+
+        if diff > 0:
+            NumberPositives += 1.0
+            posDelta += diff
+            AverageRaise = posDelta / NumberPositives
+        elif diff < 0:
+            NumberNegatives += 1.0
+            negDelta += diff
+            AverageDrop = (-1.0) * (negDelta / NumberNegatives)
+
+        if oldValue == 0.0:
+            KellyList.append(0.0)
+            continue
+        DiffInFraction = diff / oldValue
+        DiffInPercentage = DiffInFraction * 100.0
+        W = NumberPositives / (NumberPositives + NumberNegatives)
+
+        try:
+            R = AverageRaise / AverageDrop
+            K = W - ((1 - W) / R)
+        except ZeroDivisionError:
+            K = 1.0
+        KellyList.append(K)
+    return KellyList
 
 
 historical_df, exchange_df = startup()
 # load the data into dataframes (either from filesystem or download)
 
+###########################################
+# Use KellyIndex code to add to DataFrame #
+###########################################
+# Sort by date so the kelly index processes in the correct order
+historical_df = historical_df.sort('Date')
+
+# Store the coin data from the coin bitcoin into a DataFrame
+bitcoin_historical_data = historical_df[historical_df['Coin'] == 'bitcoin']
+
+# Create a list from the Close column of data in the bitcoin DataFrame
+# pass that list to your kellylist funciton
+kl = KellyList([x for x in bitcoin_historical_data['Close']])
+
+# Turn the results into a series which is matched up with the
+bitcoin_historical_data['kelly_index'] = pd.Series(kl, index=bitcoin_historical_data.index)
+
+# Save this dataframe to filesystem
+bitcoin_historical_data.to_pickle('bitcoin_with_kelly_index.pkl')
+
+# print results
+print(bitcoin_historical_data)
+###########################################
+
+################################
+# Selecting data and exchanges #
+################################
 # Filter coin historical dataframe for 'bitcoin' coin
 bitcoin_historical_data = historical_df[historical_df['Coin'] == 'bitcoin']
 print 'print bitcoin_historical_data'
@@ -177,6 +247,3 @@ print bitfinex_exchange_coins
 bitcoin_exchanges = exchange_df[exchange_df['Coin'] == 'bitcoin']
 print 'print bitcoin_exchanges'
 print bitcoin_exchanges
-
-shutdown(historical_df, exchange_df)
-# final step saves data to filesystem. Not needed if you don't change the actual dataframe data or structure
