@@ -107,7 +107,7 @@ def update_data(coin_list):
     See youtube for more details:
     https://youtu.be/1HlyKKiGg-4
     """
-    coin_list = coin_list[:2]
+    # coin_list = coin_list[:2]
     historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
     historical_df['Date'] = pd.to_datetime(historical_df['Date'], format='%b %d, %Y')
     exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
