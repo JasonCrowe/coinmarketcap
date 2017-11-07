@@ -1,4 +1,6 @@
 import pandas as pd
+from lxml import html
+import random
 # pandas library is everything you should need to analyse data
 # see youtube:
 # - https://youtu.be/-NR-ynQg0YM
@@ -54,25 +56,54 @@ def get_coin_list():
     return coins
 
 
-def get_coin_historical_data(coin):
-    """
-    Build the url from the coin input
-    download the table with pandas and store it into a dataframe
-    add the 'Coin' name to the table
-    add the 'download_date' to the table
+def get_coin_historical_data(coin, start_date='20000101', end_date='21000101'):
+    history_url = 'https://coinmarketcap.com/currencies/{coin}/historical-data/?start={start_date}&end={end_date}'.format(
+        coin=coin.lower(),
+        start_date=start_date,
+        end_date=end_date
+    )
 
-    """
-    history_url = 'https://coinmarketcap.com/currencies/{}/historical-data/?start=20000101&end=21000101'.format(
-        coin.lower())
+    user_agent_list = [
+        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
+        "Mozilla/5.0 (X11; CrOS i686 2268.111.0) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/536.11",
+        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1092.0 Safari/536.6",
+        "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1090.0 Safari/536.6",
+        "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/19.77.34.5 Safari/537.1",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
+        "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
+    ]
+
+    num = random.randint(0, (len(user_agent_list) - 1))
+    headers = {'User-Agent': user_agent_list[num]}
+    # print(history_url)
     print('{}: Downloading coin historical data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
-    try:
-        df = pd.read_html(history_url)[0]
-        df['Coin'] = coin
-        df['download_date'] = datetime.now().date()
-        return df
-    except:
-        print('Error downloading {}, trying again'.format(coin))
-        get_coin_historical_data(coin)
+    response = requests.get(history_url, headers=headers)
+    df_list = pd.read_html(response.content)
+    df = df_list[0]
+    df['Coin'] = coin
+    df['download_date'] = datetime.now().date()
+    return df_list[0]
+#
+#
+# def get_coin_historical_data(coin):
+#     """
+#     Build the url from the coin input
+#     download the table with pandas and store it into a dataframe
+#     add the 'Coin' name to the table
+#     add the 'download_date' to the table
+#
+#     """
+#     history_url = 'https://coinmarketcap.com/currencies/{}/historical-data/?start=20000101&end=21000101'.format(
+#         coin.lower())
+#     print('{}: Downloading coin historical data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
+#     try:
+#         df = pd.read_html(history_url)[0]
+#         df['Coin'] = coin
+#         df['download_date'] = datetime.now().date()
+#         return df
+#     except:
+#         print('Error downloading {}, trying again'.format(coin))
+#         get_coin_historical_data(coin)
 
 
 def get_coin_exchange_data(coin):
@@ -113,6 +144,7 @@ def update_data(coin_list):
     historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
     # Set the date as a datetime object
     historical_df['Date'] = pd.to_datetime(historical_df['Date'], format='%b %d, %Y')
+
     exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
     return historical_df, exchange_df
 
@@ -150,10 +182,7 @@ def startup():
         print('Data update complete, writing to filesystem')
         save_df_to_filesystem(historical_df, exchange_df)
 
-    try:
-        downloaded_on = historical_df['download_date'].max()
-    except:
-        print('Date not found in data.')
+    downloaded_on = historical_df['download_date'].max()
 
     if raw_input('Data was last downloaded on {}.\nUpdate Data? y/n: '.format(downloaded_on)) == 'y':
         # download and save if "y"
@@ -214,7 +243,7 @@ historical_df, exchange_df = startup()
 # Use KellyIndex code to add to DataFrame #
 ###########################################
 # Sort by date so the kelly index processes in the correct order
-historical_df = historical_df.sort('Date')
+historical_df = historical_df.sort_values(by=['Date'])
 
 # Store the coin data from the coin bitcoin into a DataFrame
 bitcoin_historical_data = historical_df[historical_df['Coin'] == 'bitcoin']
@@ -241,8 +270,8 @@ bitcoin_historical_data = historical_df[historical_df['Coin'] == 'bitcoin']
 print('print bitcoin_historical_data')
 print(bitcoin_historical_data)
 
-# Filter coin/exchange dataframe for 'bitfinex' exchange
-bitfinex_exchange_coins = exchange_df[exchange_df['Source'] == 'bitfinex']
+# Filter coin/exchange dataframe for 'Bitfinex' exchange
+bitfinex_exchange_coins = exchange_df[exchange_df['Source'] == 'Bitfinex']
 print('print bitfinex_exchange_coins')
 print(bitfinex_exchange_coins)
 
