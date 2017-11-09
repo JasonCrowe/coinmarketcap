@@ -1,16 +1,8 @@
 import pandas as pd
-from lxml import html
 import random
 from pprint import pprint
-# pandas library is everything you should need to analyse data
-# see youtube:
-# - https://youtu.be/-NR-ynQg0YM
-# youtube for stock market analysis:
-# - https://www.youtube.com/results?search_query=pandas+stock+market+data
 from datetime import datetime
-# to check the date and see if info is old
 from time import strftime, gmtime
-# to check the date and see if info is old
 from bs4 import BeautifulSoup
 import requests
 
@@ -144,7 +136,7 @@ def read_df_from_filesystem():
     return historical_df, exchange_df
 
 
-def startup(coin_list=[]):
+def startup(coin_list):
     """
     If no list is passed to the function, download the current list from
     the website and use that to build the DataFrames
@@ -156,13 +148,6 @@ def startup(coin_list=[]):
         throw an IOError which is caught below
         """
     except IOError:
-        """
-        If a list is passed to this function it will have at least 1 item on the list.
-        We will check the number of items and assume we should download everything if the
-        list is blank
-        """
-        if len(coin_list) < 1:
-            coin_list = get_coin_list()
         # update because info is missing
         print('Data not found on filesystem, downloading initial data')
         historical_df, exchange_df = update_data(coin_list)
@@ -255,11 +240,12 @@ def calculate_kelly_for_coin(coin, historical_df):
     # Sort by date so the kelly index processes in the correct order
     historical_df = historical_df.sort_values(by=['Date'])
 
-    # Store the coin data from the coin bitcoin into a DataFrame
+    # Store the coin data from the coin into a DataFrame
     coin_historical_data = historical_df[historical_df['Coin'] == coin]
-
+    pd.to_numeric(coin_historical_data['Close'], errors='coerce')
     # Create a list from the Close column of data in the bitcoin DataFrame
     # pass that list to your kellylist function
+
     kl = kelly_list([x for x in coin_historical_data['Close']])
 
     # Turn the results into a series which is matched up with the
@@ -269,7 +255,11 @@ def calculate_kelly_for_coin(coin, historical_df):
     # print results
     # print(coin_historical_data)
     # print coin, kl[-1]
-    return kl[-1]
+    try:
+        return kl[-1]
+    except IndexError as e:
+        print(coin, 'causes and index error. Is there enough data?')
+        return 0.0
 
 
 def calculate_kelly_for_exchange(exchange):
@@ -285,8 +275,7 @@ def calculate_kelly_for_exchange(exchange):
     matter right now, but it could help you a lot in the future.
     """
     print('{line}\n{ex} Coins: \n{line}'.format(ex=exchange, line='*' * 80))
-    coins = [x for x in exchange_df[
-        exchange_df['Source'] == exchange].Coin.unique()]
+    coins = [x for x in exchange_df[exchange_df['Source'] == exchange].Coin.unique()]
     print(coins)
 
     for c in coins:
@@ -308,8 +297,43 @@ A way in which this could help you is separate the code into the following secti
 3 - Business Logic: Much of what we are writing here.
 """
 coins_to_track = ['monero', 'melon', 'bitcoin', 'litecoin', 'dash', 'ripple', 'iconomi', 'gnosis-gno', 'stellar']
+coins_to_track = get_coin_list()
+"""
+There is not a good way to save this data back into the main dataframe that we save to disk. Each download is saved as
+the working data set. It would be better to store a "working" set with the tracked coins and an "all_records" set that
+contains everything. It would be best to store records in a database.
+"""
 
 historical_df, exchange_df = startup(coins_to_track)
+
+"""
+Cleaning a row is as simple as passing the row to a function
+and storing the result in a field
+"""
+def clean_close(row):
+    try:
+        c = float(row.Close)
+    except ValueError:
+        c = 'NA'
+    return c
+"""
+We will use the above function to change the values to a float or change it to NA if
+it can't convert to float.
+"""
+historical_df['cleaned_close'] = historical_df.apply(clean_close, axis=1)
+"""
+After the data is converted, we can limit the selection to only float values
+"""
+# print historical_df[historical_df['cleaned_close'] != 'NA']
+
+"""
+Pandas also has built in ways to insure the data is the correct type
+The errors='coerce' tells the function to turn the values into a NaN object
+NaN stands for Not a Number. This is probably a better direction, but I am not real
+knowledgeable on NaN and how to filter them.
+
+# pd.to_numeric(historical_df['Close'], errors='coerce')
+"""
 
 all_exchanges = [calculate_kelly_for_exchange(x) for x in exchange_df.Source.unique()]
 # CalculateKellyForExchange('bittrex')
