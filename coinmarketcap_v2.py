@@ -53,8 +53,7 @@ def get_coin_historical_data(coin, start_date='20000101', end_date='21000101'):
     num = random.randint(0, (len(user_agent_list) - 1))
     headers = {'User-Agent': user_agent_list[num]}
     # print(history_url)
-    print('{}: Downloading coin historical data: {}'.format(
-        strftime("%H:%M:%S", gmtime()), coin))
+    print('{}: Downloading coin historical data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
     try:
         response = requests.get(history_url, headers=headers)
         df_list = pd.read_html(response.content)
@@ -74,13 +73,25 @@ def get_coin_exchange_data(coin):
     add the 'Coin' name to the table
     add the 'download_date' to the table
     """
-    market_url = 'https://coinmarketcap.com/currencies/{}/#markets'.format(
-        coin.lower())
-    print('{}: Downloading coin exchange data: {}'.format(
-        strftime("%H:%M:%S", gmtime()), coin))
+    market_url = 'https://coinmarketcap.com/currencies/{}/#markets'.format(coin.lower())
+
+    user_agent_list = [
+        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
+        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1092.0 Safari/536.6",
+        "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1090.0 Safari/536.6",
+        "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/19.77.34.5 Safari/537.1",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
+        "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
+    ]
+
+    num = random.randint(0, (len(user_agent_list) - 1))
+    headers = {'User-Agent': user_agent_list[num]}
+
+    print('{}: Downloading coin exchange data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
     try:
-        df = pd.read_html(market_url)
-        df = df[0]
+        response = requests.get(market_url, headers=headers)
+        df_list = pd.read_html(response.content)
+        df = df_list[0]
         df['Coin'] = coin
         df['download_date'] = datetime.now().date()
         return df
@@ -106,8 +117,7 @@ def update_data(coin_list):
     # coin_list = coin_list[:2]
     historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
     # Set the date as a datetime object
-    historical_df['Date'] = pd.to_datetime(
-        historical_df['Date'], format='%b %d, %Y')
+    historical_df['Date'] = pd.to_datetime(historical_df['Date'], format='%b %d, %Y')
     exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
     return historical_df, exchange_df
 
@@ -301,11 +311,11 @@ coins_to_track = ['monero', 'melon', 'bitcoin', 'litecoin', 'dash', 'ripple', 'i
 
 historical_df, exchange_df = startup(coins_to_track)
 
-# CalculateKellyForExchange('Kraken')
 all_exchanges = [calculate_kelly_for_exchange(x) for x in exchange_df.Source.unique()]
 # CalculateKellyForExchange('bittrex')
+# CalculateKellyForExchange('Kraken')
 
-kelly_percentage = {}
+kelly_percentage = dict()
 kelly_percentage[u'XXMR'] = 100 * calculate_kelly_for_coin('monero', historical_df)
 kelly_percentage[u'XMLN'] = 100 * calculate_kelly_for_coin('melon', historical_df)
 kelly_percentage[u'XXBT'] = 100 * calculate_kelly_for_coin('bitcoin', historical_df)
