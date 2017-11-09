@@ -1,249 +1,333 @@
-import csv
-
+import pandas as pd
+from lxml import html
+import random
+from pprint import pprint
+# pandas library is everything you should need to analyse data
+# see youtube:
+# - https://youtu.be/-NR-ynQg0YM
+# youtube for stock market analysis:
+# - https://www.youtube.com/results?search_query=pandas+stock+market+data
+from datetime import datetime
+# to check the date and see if info is old
+from time import strftime, gmtime
+# to check the date and see if info is old
 from bs4 import BeautifulSoup
 import requests
-from tqdm import tqdm
-import numpy as np
 
 
-def LimitCoinMarketCap(data, close):
-    for t in xrange(len(data)):
-        if data[t] == "-":
-            return t - 1
-    return t - 1
+def get_coin_list():
+    session = requests.Session()
+    session.headers.update(
+        {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'})
+    #r = session.get('https://coinmarketcap.com/coins/views/all/')
+    r = session.get('https://coinmarketcap.com/all/views/all/')
+    bs = BeautifulSoup(r.content, 'html.parser')
+    coin_table = bs.find('table', attrs={'id': 'currencies-all'})
+    links_to_coins = []
+    for row in coin_table.find_all('tr')[1:]:  # Let's skip the headers.
+        cells = row.find_all('td')
+        link_to_coin = 'https://coinmarketcap.com{}'.format(
+            cells[1].find('a').get('href'))
+        links_to_coins.append(link_to_coin)
+    coins = [x.split('/')[-2:-1] for x in links_to_coins]
+    coins = [x[0] for x in coins]
+    return coins
 
 
-def PrintListInColumn(dd):
-    for d in dd:
-        print "%3.4f" % d
+def get_coin_historical_data(coin, start_date='20000101', end_date='21000101'):
+    history_url = 'https://coinmarketcap.com/currencies/{coin}/historical-data/?start={start_date}&end={end_date}'.format(
+        coin=coin.lower(),
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    user_agent_list = [
+        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
+        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1092.0 Safari/536.6",
+        "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1090.0 Safari/536.6",
+        "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/19.77.34.5 Safari/537.1",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
+        "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
+    ]
+
+    num = random.randint(0, (len(user_agent_list) - 1))
+    headers = {'User-Agent': user_agent_list[num]}
+    # print(history_url)
+    print('{}: Downloading coin historical data: {}'.format(
+        strftime("%H:%M:%S", gmtime()), coin))
+    try:
+        response = requests.get(history_url, headers=headers)
+        df_list = pd.read_html(response.content)
+        df = df_list[0]
+        df['Coin'] = coin
+        df['download_date'] = datetime.now().date()
+        return df
+    except:
+        print('Error downloading {}, trying again'.format(coin))
+        get_coin_historical_data(coin, start_date, end_date)
 
 
-def PrintListPercentageInColumn(dd):
-    for d in dd:
-        print "%3.2f%% \t %3.2f \t %d" % ((d[0] * 100), d[1], d[2])
+def get_coin_exchange_data(coin):
+    """
+    Build the url from the coin input.
+    download the table with pandas and store it into a dataframe
+    add the 'Coin' name to the table
+    add the 'download_date' to the table
+    """
+    market_url = 'https://coinmarketcap.com/currencies/{}/#markets'.format(
+        coin.lower())
+    print('{}: Downloading coin exchange data: {}'.format(
+        strftime("%H:%M:%S", gmtime()), coin))
+    try:
+        df = pd.read_html(market_url)
+        df = df[0]
+        df['Coin'] = coin
+        df['download_date'] = datetime.now().date()
+        return df
+    except:
+        print('Error downloading {}, trying again'.format(coin))
+        get_coin_exchange_data(coin)
 
 
-def KellyFloat(data):
-    if len(data) < 2: return 0
-    difference = np.diff(data)
-    # difference=[next-current for current, next in zip(data, data[1:])]
-    DifferenceFraction = [delta / datapoint for datapoint, delta in zip(data[:-1], difference)]
-    DifferencePercentage = [p * 100 for p in DifferenceFraction]
-    pos = neg = posDelta = negDelta = 0.0
-    for t in DifferencePercentage:
-        if t > 0:
-            pos += 1
-            posDelta += t
-        elif t < 0:
-            neg += 1
-            negDelta += t
-    W = pos / (pos + neg)
-    averageGain = posDelta / pos
-    averageLost = (-1.0) * (negDelta / neg)
-    R = averageGain / averageLost
-    KellyFloat = W - ((1 - W) / R)
-    return KellyFloat
+def update_data(coin_list):
+    """
+    Load all the data for each coin into a single DataFrame for historical and exchange data
+    input should be a list of coins.
+    - This means you can use 'get_coin_list()' as input or
+    - a single coin ['bitcoin'] or
+    - a list of coins ['bitcoin', 'ethereum']
+
+    The resulting file and DataFrame will be the input coins
+
+    This uses the python "list comprehension" construct.
+    See youtube for more details:
+    https://youtu.be/1HlyKKiGg-4
+    """
+    # coin_list = coin_list[:2]
+    historical_df = pd.concat([get_coin_historical_data(x) for x in coin_list])
+    # Set the date as a datetime object
+    historical_df['Date'] = pd.to_datetime(
+        historical_df['Date'], format='%b %d, %Y')
+    exchange_df = pd.concat([get_coin_exchange_data(x) for x in coin_list])
+    return historical_df, exchange_df
 
 
-def KellyList(data):
-    if len(data) < 2: return []
-    KellyList = [0.0]  # difference=[];DifferenceFraction=[];DifferencePercentage=[]
-    NumberPositives = NumberNegatives = posDelta = negDelta = AverageRaise = AverageDrop = 0.0
+def save_df_to_filesystem(historical_df, exchange_df):
+    """
+    save DataFrame to filesystem using a python 'Pickled" object
+    this can be changed to a csv:
+    - exchange_df.to_csv('exchange_data.csv')
+    or an excel file
+    - exchange_df.to_excel('exchange_data.xlsx')
+    """
+    exchange_df.to_pickle('exchange_data.pkl')
+    historical_df.to_pickle('historical_data.pkl')
+
+
+def read_df_from_filesystem():
+    """
+    read data from pickled object on filesystem into DataFrames and return the
+    DataFrames to the filesystem
+    """
+    exchange_df = pd.read_pickle('exchange_data.pkl')
+    historical_df = pd.read_pickle('historical_data.pkl')
+    return historical_df, exchange_df
+
+
+def startup(coin_list=[]):
+    """
+    If no list is passed to the function, download the current list from
+    the website and use that to build the DataFrames
+    """
+    try:
+        historical_df, exchange_df = read_df_from_filesystem()
+        """
+        Try to read data from filesystem. If it doesn't exist the code will
+        throw an IOError which is caught below
+        """
+    except IOError:
+        """
+        If a list is passed to this function it will have at least 1 item on the list.
+        We will check the number of items and assume we should download everything if the
+        list is blank
+        """
+        if len(coin_list) < 1:
+            coin_list = get_coin_list()
+        # update because info is missing
+        print('Data not found on filesystem, downloading initial data')
+        historical_df, exchange_df = update_data(coin_list)
+        print('Data update complete, writing to filesystem')
+        save_df_to_filesystem(historical_df, exchange_df)
+    """
+    Once we have a list we want to check how old it is.
+    """
+    downloaded_on = historical_df['download_date'].max()
+#     print historical_df['download_date']
+#     type(historical_df['download_date'])
+    """
+    Show the user the latest date and let them decide if they want to update the data or not.
+    When we started we were dealing with the entire list as a single object, so finding the latest
+    date worked fine. We may want to reconsider how this is achomplished now that we are working
+    with and downloading specific coins
+    """
+    if raw_input('Data was last downloaded on {}.\nUpdate Data? y/n: '.format(downloaded_on)) == 'y':
+        # download and save if "y" return the saved data if "n"
+        print('Starting data update')
+        historical_df, exchange_df = update_data(coin_list)
+        print('Data update complete, writing to filesystem')
+        save_df_to_filesystem(historical_df, exchange_df)
+        print('New data has been loaded into DataFrames and saved to filesystem.')
+    return historical_df, exchange_df
+
+
+def shutdown(historical_df, exchange_df):
+    """
+    As the final step, save data to filesystem this isn't really needed,
+    but I want you to know how to save data after analysis
+    """
+    save_df_to_filesystem(historical_df, exchange_df)
+
+
+def kelly_list(data):
+    if len(data) < 2:
+        return []
+    kelly_list = [0.0]
+    number_positives = number_negatives = pos_delta = neg_delta = average_raise = average_drop = 0.0
 
     for t in xrange(len(data) - 1):
-        oldValue = data[t]
-        newValue = data[t + 1]
-        diff = newValue - oldValue
-        # print t, oldValue,newValue,diff
+        old_value = data[t]
+        new_value = data[t + 1]
+        diff = new_value - old_value
 
         if diff > 0:
-            NumberPositives += 1.0
-            posDelta += diff
-            AverageRaise = posDelta / NumberPositives
-            # print t,posDelta,NumberPositives,AverageRaise
+            number_positives += 1.0
+            pos_delta += diff
+            average_raise = pos_delta / number_positives
         elif diff < 0:
-            NumberNegatives += 1.0
-            negDelta += diff
-            AverageDrop = (-1.0) * (negDelta / NumberNegatives)
-            # print t,negDelta,NumberNegatives,AverageDrop
+            number_negatives += 1.0
+            neg_delta += diff
+            average_drop = (-1.0) * (neg_delta / number_negatives)
 
-        if oldValue == 0.0:
-            KellyList.append(0.0)
+        if old_value == 0.0:
+            kelly_list.append(0.0)
             continue
-        DiffInFraction = diff / oldValue
-        DiffInPercentage = DiffInFraction * 100.0  # difference.             append(diff);DifferenceFraction.     append(DiffInFraction);DifferencePercentage.   append(DiffInPercentage)
-        W = NumberPositives / (NumberPositives + NumberNegatives)
-
-        try:
-            R = AverageRaise / AverageDrop
-            K = W - ((1 - W) / R)
-        except ZeroDivisionError:
-            K = 1.0
-        # print t,NumberPositives,NumberNegatives,W,R,K
-        KellyList.append(K)
-    return KellyList
-
-
-class Coin:
-    """
-    Contains data for a day's results, and a method to write the data to a
-    file. _'s in date_ and open_ are because date and open are builtin
-    Python objects, and new variables should not use builtin's names.
-    """
-
-    def __init__(self, name):
-        self.name = name
-        self.date_ = []
-        self.open_ = []
-        self.high = []
-        self.low = []
-        self.close = []
-        self.volume = []
-        self.market_cap = []
-        self.exchanges = []
-
-    def writer(self):
         """
-        Writes to the CSV file we created with file_handler().
-        :return: None
+        diff_in_percentage is not actually used in the program.
+        this also means that diff_in_fraction is not used in the program
         """
-        with open('coinmarketcap_results.csv', 'a') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(
-                [self.name, self.date_, self.open_, self.high, self.low,
-                 self.close, self.volume, self.market_cap, self.exchanges]
-            )
+        #diff_in_fraction = diff / old_value
+        #diff_in_percentage = diff_in_fraction * 100.0
+
+        if (number_positives + number_negatives):
+            W = number_positives / (number_positives + number_negatives)
+        else:
+            W = 0
+
+        if average_raise == 0:
+            if average_drop == 0:
+                K = 0.0
+            else:
+                K = -1.0
+        else:
+            if average_drop == 0:
+                K = 1.0
+            else:
+                R = average_raise / average_drop
+                K = W - ((1 - W) / R)
+        kelly_list.append(K)
+    return kelly_list
 
 
-def create_http_session():
+def calculate_kelly_for_coin(coin, historical_df):
+    ###########################################
+    # Use KellyIndex code to add to DataFrame #
+    ###########################################
+    # Sort by date so the kelly index processes in the correct order
+    historical_df = historical_df.sort_values(by=['Date'])
+
+    # Store the coin data from the coin bitcoin into a DataFrame
+    coin_historical_data = historical_df[historical_df['Coin'] == coin]
+
+    # Create a list from the Close column of data in the bitcoin DataFrame
+    # pass that list to your kellylist function
+    kl = kelly_list([x for x in coin_historical_data['Close']])
+
+    # Turn the results into a series which is matched up with the
+    #coin_historical_data['kelly_index'] = pd.Series(kl, index=coin_historical_data.index)
+    # ^^^ This is not needed if you just want to return the current kelly value.
+
+    # print results
+    # print(coin_historical_data)
+    # print coin, kl[-1]
+    return kl[-1]
+
+
+def calculate_kelly_for_exchange(exchange):
     """
-    Quick little function for returning a requests.Session() instance
-    with a properly set User-Agent header.
-    :return: requests.Session()
+    Notice the following line:
+    exchange_df['Source'] == exchange].Coin.unique()]
+    We are passing the exchange to the DataFrame as a filter,
+    then we select the unique values from the filtered DataFrame.
+
+    It might be a good idea for this function to pass back the results
+    rather than just printing them to screen. It is almost always a good
+    idea to separate your business logic and presentation logic. It may not
+    matter right now, but it could help you a lot in the future.
     """
-    session = requests.Session()
-    session.headers.update({'User-Agent':
-                                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-                            })
-    return session
+    print('{line}\n{ex} Coins: \n{line}'.format(ex=exchange, line='*' * 80))
+    coins = [x for x in exchange_df[
+        exchange_df['Source'] == exchange].Coin.unique()]
+    print(coins)
 
+    for c in coins:
+        k = calculate_kelly_for_coin(c, historical_df)
+        if k > 0.10:
+            print 'Kelly %-25s = %-2.2f %%' % (c, (100*k))
 
-def soupify(session, url):
-    """
-    Makes parse-able HTML from any given URL.
-    :param session: requests.Session()
-    :param url: str
-    :return: BeautifulSoup object
-    """
-    r = session.get(url)
-    return BeautifulSoup(r.content, 'html.parser')
+    # print(kraken_exchange_coins)
+    # Filter coin/exchange dataframe for 'Kraken' exchange
 
+"""
+To add to the idea of separating business logic and presentation logic there is also
+merit in the idea of separating out the data layer.
 
-class CoinMarketCap_Scraper:
-    """
-    Handles the logic for the web-scraping of
-    https://coinmarketcap.com/coins/views/all/.
-    """
+A way in which this could help you is separate the code into the following sections:
+1 - Data: this would be a program that runs once a day to update all the data.
+2 - Presentation: This isn't needed too much now, but envision a reports that
+    are presented to clients.
+3 - Business Logic: Much of what we are writing here.
+"""
+coins_to_track = ['monero', 'melon', 'bitcoin', 'litecoin', 'dash', 'ripple', 'iconomi', 'gnosis-gno', 'stellar']
 
-    def __init__(self):
-        self.session = create_http_session()
+historical_df, exchange_df = startup(coins_to_track)
 
-    def scrape_coin_links(self):
-        """
-        Scrapes https://coinmarketcap.com/coins/views/all/ for
-        valid links to every coin listed on the website.
-        :return: list
-        """
-        soup = soupify(
-            self.session, 'https://coinmarketcap.com/coins/views/all/')
-        #  Time to ID the coin table so we can iterate thru it's rows.
-        coin_table = soup.find('table', attrs={'id': 'currencies-all'})
-        #  Got it!  Now, we're going to search for all that table's tr HTML
-        #  tags.  tr stand for "table row", so let's call them rows.
-        links_to_coins = []
-        #  This is where we'll store the scraped links to the coins.
-        for row in coin_table.find_all('tr')[1:]:  # Let's skip the headers.
-            cells = row.find_all('td')
-            #  Table rows contain td tags, which stands for table data.
-            #  This represents the column-delimited information on the site.
-            link_to_coin = 'https://coinmarketcap.com' + \
-                           cells[1].find('a').get('href')
-            #  We find the link to the coin's data by going to the first
-            #  tag, locating the link tag, and retrieving the link itself,
-            #  AKA 'href' - remember, list indexes in Python start with 0!
-            links_to_coins.append(link_to_coin)
-            #  We add the scraped link to the links_to_coins list,
-            #  and then the 'for' loop continues onto the next row.
-        return links_to_coins  # Sending the links back for further parsing!
+# CalculateKellyForExchange('Kraken')
+all_exchanges = [calculate_kelly_for_exchange(x) for x in exchange_df.Source.unique()]
+# CalculateKellyForExchange('bittrex')
 
-    def scrape_data_for_coin(self, link_to_coin):
-        soup = soupify(self.session, link_to_coin + 'historical-data/' + '?start=20000101&end=21000101')
-        # print(link_to_coin + 'historical-data/' + '?start=20000101&end=21000101')
-        #  We have to add 'historical-data' to the link, or else
-        #  we'll just get the data available on the currency page.
-        # Additionally, setting the search range from 2000 to 2100
-        # automatically gives us all the available data.
-        coin_name = soup.find('h2').text.strip().replace(
-            'Historical data for ', ''
-        )  # This gives us the name of the coin.
-        historical_data_table = soup.find('table', class_='table')
-        #  Just like in scrape_coin_links(), we find the table
-        #  and then iterate over it - skipping the headers again.
-        c = Coin(name=coin_name)
-        for row in historical_data_table.find_all('tr')[1:]:
-            cells = row.find_all('td')
-            #  And just like in scrape_coin_links, we gather all
-            #  of the row's data held in td tags.
-            c.date_.append(cells[0].text.strip())
-            c.open_.append(cells[1].text.strip())
-            c.high.append(cells[2].text.strip())
-            c.low.append(cells[3].text.strip())
-            c.close.append(float(cells[4].text.strip()))
-            c.volume.append(cells[5].text.strip())
-            c.market_cap.append(cells[6].text.strip())
-        soup = soupify(self.session, link_to_coin +
-                       '#markets')
-        table = soup.find('table', attrs={'id': 'markets-table'})
-        for row in table.find_all('tr')[1:]:
-            cells = [i.text for i in row.find_all('td')]
-            c.exchanges.append(cells[1])
+kelly_percentage = {}
+kelly_percentage[u'XXMR'] = 100 * calculate_kelly_for_coin('monero', historical_df)
+kelly_percentage[u'XMLN'] = 100 * calculate_kelly_for_coin('melon', historical_df)
+kelly_percentage[u'XXBT'] = 100 * calculate_kelly_for_coin('bitcoin', historical_df)
+kelly_percentage[u'XLTC'] = 100 * calculate_kelly_for_coin('litecoin', historical_df)
+kelly_percentage[u'DASH'] = 100 * calculate_kelly_for_coin('dash', historical_df)
+kelly_percentage[u'XXRP'] = 100 * calculate_kelly_for_coin('ripple', historical_df)
+kelly_percentage[u'XICN'] = 100 * calculate_kelly_for_coin('iconomi', historical_df)
+kelly_percentage[u'GNO'] = 100 * calculate_kelly_for_coin('gnosis-gno', historical_df)
+kelly_percentage[u'XXLM'] = 100 * calculate_kelly_for_coin('stellar', historical_df)
 
-        # print c.close
-        lim = LimitCoinMarketCap(c.volume, c.close)
-        data = c.close[lim::-1]
-        # PrintListInColumn(data)
-        KFull = KellyList(data)
-        # a=zip(KFull,data,xrange(len(data)))
-        # PrintListPercentageInColumn(a)
-        # print c.name, " kelly=%1.2f%% volume=%1.2f"%((KFull[-1]*100),(float(c.volume[-1])*c.close[-1]))
-        print c.name, " kelly=%1.2f%%" % ((KFull[-1] * 100))
-        print
-        c.writer()
+print("Kelly Percentage")
+pprint(kelly_percentage)
 
+"""
+I think you should separate the data and the code. Writing a dictionary to an external file
+is not really the best idea for python. Unfortunately, I cannot give you a great reason why,
+but I know that it not done like this for other python programs.
 
-def file_handler():
-    """
-    Creates the file we'll write to, and writes headers.
-    :return: None
-    """
-    with open('coinmarketcap_results.csv', 'w') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(
-            ['name', 'date_', 'open_', 'high', 'low',
-             'close', 'volume', 'market_cap', 'exchanges']
-        )
-
-
-def main():
-    file_handler()
-    coinmarketcap_scraper = CoinMarketCap_Scraper()
-    links_to_coins = coinmarketcap_scraper.scrape_coin_links()
-    for link_to_coin in tqdm(links_to_coins):
-        try:
-            coinmarketcap_scraper.scrape_data_for_coin(link_to_coin)
-        except Exception as e:
-            print(e)
-
-
-if __name__ == '__main__':
-    main()
+Persistent data is really best stored in a database or even a CSV file. Those can be easily
+read and written by pandas
+"""
+to_write = "Kelly Percentage=%s" % kelly_percentage
+file_object = open('KellyValues.py', 'w')
+file_object.write(to_write)
+file_object.close()

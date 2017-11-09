@@ -77,12 +77,16 @@ def get_coin_historical_data(coin, start_date='20000101', end_date='21000101'):
     headers = {'User-Agent': user_agent_list[num]}
     # print(history_url)
     print('{}: Downloading coin historical data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
-    response = requests.get(history_url, headers=headers)
-    df_list = pd.read_html(response.content)
-    df = df_list[0]
-    df['Coin'] = coin
-    df['download_date'] = datetime.now().date()
-    return df_list[0]
+    try:
+        response = requests.get(history_url, headers=headers)
+        df_list = pd.read_html(response.content)
+        df = df_list[0]
+        df['Coin'] = coin
+        df['download_date'] = datetime.now().date()
+        return df
+    except:
+        print('Error downloading {}, trying again'.format(coin))
+        get_coin_historical_data(coin, start_date, end_date)
 #
 #
 # def get_coin_historical_data(coin):
