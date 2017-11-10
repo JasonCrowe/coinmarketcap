@@ -103,8 +103,8 @@ class Coin:
             self.unpickle_history()
             print('unpickled history: {}'.format(self.coin_name))
         except IOError:
-            self.history = self.download_history()
             print('File not found, downloading history: {}'.format(self.coin_name))
+            self.history = self.download_history()
             self.pickle_history()
             print('pickled history: {}'.format(self.coin_name))
 
@@ -130,10 +130,7 @@ class Coin:
                 self.download_exchange()
                 self.pickle_exchange()
         except KeyError:
-            print('Manual Check: https://coinmarketcap.com/currencies/{}/historical-data/?start=20000101&end=22222222'.format(self.coin_name))
-
-    def __repr__(self):
-        return '< name : {}, kelly_index: {} >'.format(self.coin_name, self.kelly_index)
+            print('Manual Check: https://coinmarketcap.com/currencies/{}/#markets'.format(self.coin_name))
 
     def download_partial_history(self):
             return self.download_history((self.downloaded_on - timedelta(days=1)).strftime('%Y%m%d'))
@@ -196,9 +193,13 @@ class Coin:
             downloaded_history = cmcs.get_coin_historical_data(self.coin_name, start_date=start_date)
             downloaded_history['Date'] = pd.to_datetime(downloaded_history['Date'], format='%b %d, %Y')
             return downloaded_history
-        except ValueError as e:
-            print(e)
-            self.download_history()
+        except (TypeError, ValueError) as e:
+            try:
+                downloaded_history = cmcs.get_coin_historical_data(self.coin_name, start_date=start_date)
+                downloaded_history['Date'] = pd.to_datetime(downloaded_history['Date'], format='%b %d, %Y')
+                return downloaded_history
+            except:
+                print('Tried twice to download the data. Giving up and moving on.')
 
     def unpickle_history(self):
         self.history = pd.read_pickle(os.path.join(SUB, '{}_history.pkl'.format(self.coin_name)))
@@ -227,5 +228,5 @@ if __name__ == '__main__':
     main()
 
     # # work with individual coin
-    # centra = Coin('centra')
-    # print centra.history
+    testcoin = Coin('bitbay')
+    print testcoin.history
