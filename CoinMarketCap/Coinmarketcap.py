@@ -13,6 +13,8 @@ try:
 except:
     pass
 
+exchange_list = []
+
 
 class CoinMarketCapScraper:
     def __init__(self):
@@ -126,17 +128,27 @@ class Coin:
 
         try:
             self.downloaded_on = self.exchange['download_date'].max()
+        except:
+            self.download_exchange()
+
+        try:
             if self.downloaded_on != datetime.now().date():
                 self.download_exchange()
                 self.pickle_exchange()
-        except KeyError:
+        except (TypeError, KeyError):
             print('Manual Check: https://coinmarketcap.com/currencies/{}/#markets'.format(self.coin_name))
+        finally:
+            exchange_list.append(self.exchange)
 
         try:
             self.history.drop_duplicates(inplace=True)
         except:
             pass
         self.clean_history()
+        try:
+            self.get_max_volume()
+        except KeyError:
+            pass
 
     def clean_history(self):
         try:
@@ -246,23 +258,33 @@ class Coin:
         except ValueError:
             return None
 
+    def get_max_volume(self):
+        d = self.history[['Date', 'Volume']]
+        d.dropna(inplace = True)
+        dv = d['Date'].max()
+        return dv
+
 
 def main():
     cmc = CoinMarketCapScraper()
     coin_list = cmc.scrape_coin_list()
     coin_list.sort()
-
     print coin_list
     # update all coin_data
-    for c in coin_list:
+    for c in coin_list[:3]:
         Coin(c)
+    # gather exchanges
+    exchanges_df = pd.concat(exchange_list)
+    e = exchanges_df[['Source', 'Coin']].drop_duplicates().to_dict(orient='row')
+    print e
 
 if __name__ == '__main__':
     main()
 
     # # # work with individual coin
-    # testcoin = Coin('bitcoin')
+    testcoin = Coin('bitcoin')
     # print testcoin.history
-    # testcoin.kelly_index()
-    # print testcoin.kelly_index_value
+    testcoin.kelly_index()
+    print testcoin.get_max_volume()
+    print testcoin.kelly_index_value
 
