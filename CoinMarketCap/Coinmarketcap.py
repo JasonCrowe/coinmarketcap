@@ -25,7 +25,9 @@ class CoinMarketCapScraper:
             "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
         ]
         # self.coin_list = None
-        # self.coin_ignore = []
+        self.coin_ignore = ['oxycoin']
+        self.download_attempts = 0
+        self.download_limit = 3
 
     def scrape_coin_list(self):
         session = requests.Session()
@@ -43,7 +45,7 @@ class CoinMarketCapScraper:
             links_to_coins.append(link_to_coin)
         coins = [x.split('/')[-2:-1] for x in links_to_coins]
         coins = [x[0] for x in coins]
-        # self.coin_list = [c for c in coins if c not in self.coin_ignore]
+        coins = [c for c in coins if c not in self.coin_ignore]
         return coins
 
     def get_coin_historical_data(self, coin, start_date='20000101', end_date='21000101'):
@@ -63,10 +65,17 @@ class CoinMarketCapScraper:
             df = df_list[0]
             df['Coin'] = coin
             df['download_date'] = datetime.now().date()
+            pd.to_datetime(df['Date'], format='%b %d, %Y')
             return df
         except:
             print('Error downloading {}, trying again'.format(coin))
             print(history_url)
+            self.download_attempts += 1
+            if self.download_attempts > self.download_limit:
+                columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Market Cap', 'Coin', 'download_date']
+                df = pd.DataFrame([], columns=columns)
+                print df
+                return df
             self.get_coin_historical_data(coin, start_date, end_date)
 
     def get_coin_exchange_data(self, coin):
@@ -76,14 +85,10 @@ class CoinMarketCapScraper:
         print('{}: Downloading coin exchange data: {}'.format(strftime("%H:%M:%S", gmtime()), coin))
         try:
             response = requests.get(market_url, headers=headers)
-            try:
-                df_list = pd.read_html(response.content)
-                df = df_list[0]
-                df['Coin'] = coin
-                df['download_date'] = datetime.now().date()
-            except ValueError:
-                print('Page missing information, returning empty dataframe')
-                df = pd.DataFrame()
+            df_list = pd.read_html(response.content)
+            df = df_list[0]
+            df['Coin'] = coin
+            df['download_date'] = datetime.now().date()
             return df
         except:  # TODO add extra error checking for specific types of downloading errors
             print('Error downloading {}, trying again'.format(coin))
@@ -99,24 +104,19 @@ class Coin:
         self.kelly_index_value = None
         self.downloaded_on = None
 
-        try:
-            self.unpickle_history()
-            print('unpickled history: {}'.format(self.coin_name))
-        except IOError:
-            print('File not found, downloading history: {}'.format(self.coin_name))
-            self.history = self.download_history()
-            self.pickle_history()
-            print('pickled history: {}'.format(self.coin_name))
+        self.unpickle_or_download_history()
 
         try:
             self.downloaded_on = self.history['download_date'].max()
+        except:
+            self.download_history()
+
+        try:
             if self.downloaded_on != datetime.now().date():
-                self.history = pd.concat([self.history, self.download_partial_history()])
-                self.history['download_date'] = datetime.now().date()
+                self.download_history()
                 self.pickle_history()
         except (IOError, KeyError):
             self.download_history()
-            self.pickle_history()
 
         try:
             self.unpickle_exchange()
@@ -132,12 +132,34 @@ class Coin:
         except KeyError:
             print('Manual Check: https://coinmarketcap.com/currencies/{}/#markets'.format(self.coin_name))
 
+        try:
+            self.history.drop_duplicates(inplace=True)
+        except:
+            pass
+        self.clean_history()
+
+    def clean_history(self):
+        try:
+            self.history['Volume'] = self.history.apply(self.clean_volume, axis=1)
+        except:
+            print self.history
+
+    def unpickle_or_download_history(self):
+        try:
+            self.unpickle_history()
+            print('unpickled history: {}'.format(self.coin_name))
+        except IOError:
+            print('File not found, downloading history: {}'.format(self.coin_name))
+            self.history = self.download_history()
+            self.pickle_history()
+            print('pickled history: {}'.format(self.coin_name))
+
     def download_partial_history(self):
             return self.download_history((self.downloaded_on - timedelta(days=1)).strftime('%Y%m%d'))
 
     def kelly_index(self):
-        data = self.history.sort_values(by=['Date'])
-        data = data['Close']
+        data = self.history[['Date', 'Close']].sort_values(by=['Date'])
+        data = [x for x in data['Close']]
 
         if len(data) < 2:
             return []
@@ -190,13 +212,11 @@ class Coin:
     def download_history(self, start_date='20010101'):
         cmcs = CoinMarketCapScraper()
         try:
-            downloaded_history = cmcs.get_coin_historical_data(self.coin_name, start_date=start_date)
-            downloaded_history['Date'] = pd.to_datetime(downloaded_history['Date'], format='%b %d, %Y')
+            downloaded_history = cmcs.get_coin_historical_data(self.coin_name)
             return downloaded_history
         except (TypeError, ValueError) as e:
             try:
-                downloaded_history = cmcs.get_coin_historical_data(self.coin_name, start_date=start_date)
-                downloaded_history['Date'] = pd.to_datetime(downloaded_history['Date'], format='%b %d, %Y')
+                downloaded_history = cmcs.get_coin_historical_data(self.coin_name)
                 return downloaded_history
             except:
                 print('Tried twice to download the data. Giving up and moving on.')
@@ -208,10 +228,23 @@ class Coin:
         self.exchange = pd.read_pickle(os.path.join(SUB, '{}_exchange.pkl'.format(self.coin_name)))
 
     def pickle_history(self):
-        self.history.to_pickle(os.path.join(SUB, '{}_history.pkl'.format(self.coin_name)))
+        try:
+            self.history.to_pickle(os.path.join(SUB, '{}_history.pkl'.format(self.coin_name)))
+        except AttributeError:
+            pass
 
     def pickle_exchange(self):
-        self.exchange.to_pickle(os.path.join(SUB, '{}_exchange.pkl'.format(self.coin_name)))
+        try:
+            self.exchange.to_pickle(os.path.join(SUB, '{}_exchange.pkl'.format(self.coin_name)))
+        except AttributeError:
+            pass
+
+    def clean_volume(self, row):
+        volume = row.Volume
+        try:
+            return int(volume)
+        except ValueError:
+            return None
 
 
 def main():
@@ -227,6 +260,9 @@ def main():
 if __name__ == '__main__':
     main()
 
-    # # work with individual coin
-    testcoin = Coin('bitbay')
-    print testcoin.history
+    # # # work with individual coin
+    # testcoin = Coin('bitcoin')
+    # print testcoin.history
+    # testcoin.kelly_index()
+    # print testcoin.kelly_index_value
+
