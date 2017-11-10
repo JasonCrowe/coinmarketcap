@@ -24,8 +24,8 @@ class CoinMarketCapScraper:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
             "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
         ]
-        self.coin_list = None
-        self.coin_ignore = []
+        # self.coin_list = None
+        # self.coin_ignore = []
 
     def scrape_coin_list(self):
         session = requests.Session()
@@ -43,8 +43,8 @@ class CoinMarketCapScraper:
             links_to_coins.append(link_to_coin)
         coins = [x.split('/')[-2:-1] for x in links_to_coins]
         coins = [x[0] for x in coins]
-        self.coin_list = [c for c in coins if c not in self.coin_ignore]
-        return self.coin_list
+        # self.coin_list = [c for c in coins if c not in self.coin_ignore]
+        return coins
 
     def get_coin_historical_data(self, coin, start_date='20000101', end_date='21000101'):
         # print 'trying to download the following data', start_date, end_date
@@ -192,13 +192,13 @@ class Coin:
 
     def download_history(self, start_date='20010101'):
         cmcs = CoinMarketCapScraper()
-        downloaded_history = cmcs.get_coin_historical_data(self.coin_name, start_date=start_date)
         try:
+            downloaded_history = cmcs.get_coin_historical_data(self.coin_name, start_date=start_date)
             downloaded_history['Date'] = pd.to_datetime(downloaded_history['Date'], format='%b %d, %Y')
             return downloaded_history
         except ValueError as e:
             print(e)
-            return downloaded_history
+            self.download_history()
 
     def unpickle_history(self):
         self.history = pd.read_pickle(os.path.join(SUB, '{}_history.pkl'.format(self.coin_name)))
@@ -216,6 +216,8 @@ class Coin:
 def main():
     cmc = CoinMarketCapScraper()
     coin_list = cmc.scrape_coin_list()
+    coin_list.sort()
+
     print coin_list
     # update all coin_data
     for c in coin_list:
@@ -224,6 +226,6 @@ def main():
 if __name__ == '__main__':
     main()
 
-    # work with individual coin
-    # bitcoin = Coin('bitcoin')
-    # print bitcoin.history
+    # # work with individual coin
+    # centra = Coin('centra')
+    # print centra.history
