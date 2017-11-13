@@ -27,7 +27,7 @@ class CoinMarketCapScraper:
             "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
         ]
         # self.coin_list = None
-        self.coin_ignore = ['oxycoin']
+        self.coin_ignore = ['oxycoin', 'decision-token']
         self.download_attempts = 0
         self.download_limit = 3
 
@@ -170,8 +170,10 @@ class Coin:
             return self.download_history((self.downloaded_on - timedelta(days=1)).strftime('%Y%m%d'))
 
     def kelly_index(self):
-        data = self.history[['Date', 'Close']].sort_values(by=['Date'])
+        data = self.history
+
         data = [x for x in data['Close']]
+        data = data[::-1]
 
         if len(data) < 2:
             return []
@@ -182,14 +184,16 @@ class Coin:
             old_value = data[t]
             new_value = data[t + 1]
             diff = new_value - old_value
+            DiffInFraction = diff / old_value
+            DiffInPercentage = DiffInFraction * 100.0
 
             if diff > 0:
                 number_positives += 1.0
-                pos_delta += diff
+                pos_delta += DiffInPercentage
                 average_raise = pos_delta / number_positives
             elif diff < 0:
                 number_negatives += 1.0
-                neg_delta += diff
+                neg_delta += DiffInPercentage
                 average_drop = (-1.0) * (neg_delta / number_negatives)
 
             if old_value == 0.0:
@@ -271,12 +275,19 @@ def main():
     coin_list.sort()
     print coin_list
     # update all coin_data
-    for c in coin_list[:3]:
+    for c in coin_list:
         Coin(c)
     # gather exchanges
     exchanges_df = pd.concat(exchange_list)
-    e = exchanges_df[['Source', 'Coin']].drop_duplicates().to_dict(orient='row')
-    print e
+    e_df = exchanges_df[['Source', 'Coin']].drop_duplicates()
+    print e_df
+    # Show all exchanges for a coin
+    print "All exchanges for 0x"
+    print e_df[e_df['Coin'] == '0x']
+    # Show all coins for an exchange
+    print 'All coins for Poloniex'
+    print e_df[e_df['Source'] == 'Poloniex']
+
 
 if __name__ == '__main__':
     main()
@@ -285,6 +296,5 @@ if __name__ == '__main__':
     testcoin = Coin('bitcoin')
     # print testcoin.history
     testcoin.kelly_index()
-    print testcoin.get_max_volume()
     print testcoin.kelly_index_value
 

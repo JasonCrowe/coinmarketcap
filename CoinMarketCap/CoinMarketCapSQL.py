@@ -10,6 +10,7 @@ from time import sleep
 engine = create_engine('sqlite:///coinmarketcap.db')
 BASE = 'https://coinmarketcap.com'
 history_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Market_Cap', 'Coin']
+ignore_coins = ['mergecoin']
 
 
 def get_parsed_page(url):
@@ -20,7 +21,7 @@ def get_parsed_page(url):
         bs = BeautifulSoup(response.content, 'html.parser')
         return bs
     except requests.exceptions.Timeout:
-        print('Connection Timeout')
+        print('Connection Timeout, trying again...')
         sleep(10)
         response = requests.get(url, headers=headers)
         bs = BeautifulSoup(response.content, 'html.parser')
@@ -41,10 +42,25 @@ def get_coin_list():
         link_to_coin = 'https://coinmarketcap.com{}'.format(
             cells[1].find('a').get('href'))
         links_to_coins.append(link_to_coin)
-    coins = [x.split('/')[-2:-1] for x in links_to_coins]
-    coins = [x[0] for x in coins]
+    coins = [x.split('/')[-2:-1][0] for x in links_to_coins]
     coins.sort()
+    coins = [c for c in coins if c not in ignore_coins]
     return coins
+
+
+def get_exchange_data(input_coin):
+    exchange_url = 'https://coinmarketcap.com/currencies/{}/#markets'.format(input_coin)
+    print exchange_url
+    bs = get_parsed_page(exchange_url)
+
+    table = bs.find('table', attrs={'id': 'markets-table'})
+    data = list()
+    for row in table.find_all('tr')[1:]:
+        cells = row.find_all('td')
+        print [cells[1].get_text(), input_coin]
+        df_part = pd.DataFrame([cells[1].get_text(), input_coin])
+        data.append(df_part)
+    return pd.concat(data)
 
 
 def get_coin_historical_data(input_coin):
@@ -83,6 +99,7 @@ def clean_scraped_row(row):
     try:
         row[0] = datetime.strptime(row[0], "%b %d, %Y")
     except ValueError:
+        #  No valid values, return None
         print row[0]
         return None
 
@@ -90,7 +107,8 @@ def clean_scraped_row(row):
         try:
             row[r] = row[r].replace(',', '')
             row[r] = str(row[r].replace('-', ''))
-        except TypeError:
+        except TypeError as t:
+            print t
             pass
     try:
         row[1] = float(row[1])
@@ -109,7 +127,6 @@ def clean_scraped_row(row):
     except ValueError:
         row[6] = None
     print 'Post-Clean', row
-
     return row
 
 
@@ -119,15 +136,12 @@ def build_last_date_dict(rs):
 
 
 def build_start_date():
-    try:
-        q = "select Coin, max(Date) as last_downloaded from history group by Coin"
-        coin_download_dates = {}
-        with engine.connect() as con:
-            for r in con.execute(q):
-                coin_download_dates[r[0]] = date_2_search(r[1])
-        return coin_download_dates
-    except:
-        return dict()
+    q = "select Coin, max(Date) as last_downloaded from history group by Coin"
+    coin_download_dates = {}
+    with engine.connect() as con:
+        for r in con.execute(q):
+            coin_download_dates[r[0]] = date_2_search(r[1])
+    return coin_download_dates
 
 
 def date_2_search(date_string):
@@ -135,12 +149,27 @@ def date_2_search(date_string):
     return converted_string + timedelta(days=1)
 
 
-all_coins_list = get_coin_list()
-coin_last_downloaded_date = build_start_date()
+def download_history(input_coins):
+    for coin in input_coins:
+        coin_history = get_coin_historical_data(coin)
+        if coin_history is not None:
+            df = pd.DataFrame(coin_history, columns=history_columns)
+            df.to_sql('history', engine, if_exists='append', index=False)
 
-for coin in all_coins_list:
-    coin_history = get_coin_historical_data(coin)
-    if coin_history is not None:
-        df = pd.DataFrame(coin_history, columns=history_columns)
-        print df
-        df.to_sql('history', engine, if_exists='append', index=False)
+
+def download_exchanges(input_coins):
+    exchange_list = [get_exchange_data(coin) for coin in input_coins]
+    merged_df = pd.concat(exchange_list)
+    merged_df.drop_duplicates(inplace=True)
+    merged_df.to_sql('exchanges', engine, if_exists='replace', index=False)
+
+
+if __name__ == "__main__":
+    all_coins_list = get_coin_list()
+    coin_last_downloaded_date = build_start_date()
+
+    if raw_input("Download Exchanges? y/n: ") == 'y':
+        download_exchanges(all_coins_list)
+
+    if raw_input("Download History? y/n: ") == 'y':
+        download_history(all_coins_list)
