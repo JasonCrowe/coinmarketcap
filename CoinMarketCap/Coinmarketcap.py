@@ -260,7 +260,7 @@ class Coin:
 
     def get_max_volume(self):
         d = self.history[['Date', 'Volume']]
-        d.dropna(inplace = True)
+        d.dropna(inplace=True)
         dv = d['Date'].max()
         return dv
 
