@@ -3,6 +3,8 @@ from sqlalchemy import create_engine
 import pandas as pd
 from datetime import datetime, timedelta
 # from time import strftime
+import sqlite3
+# from sqlite3 import OperationalError
 from bs4 import BeautifulSoup
 import requests
 from time import sleep
@@ -107,8 +109,7 @@ def clean_scraped_row(row):
         try:
             row[r] = row[r].replace(',', '')
             row[r] = str(row[r].replace('-', ''))
-        except TypeError as t:
-            print t
+        except TypeError:
             pass
     try:
         row[1] = float(row[1])
@@ -138,10 +139,15 @@ def build_last_date_dict(rs):
 def build_start_date():
     q = "select Coin, max(Date) as last_downloaded from history group by Coin"
     coin_download_dates = {}
-    with engine.connect() as con:
-        for r in con.execute(q):
-            coin_download_dates[r[0]] = date_2_search(r[1])
-    return coin_download_dates
+    try:
+        with engine.connect() as con:
+            for r in con.execute(q):
+                coin_download_dates[r[0]] = date_2_search(r[1])
+    except sqlite3.OperationalError:
+        print('The database does not currently exist')
+        coin_download_dates = None
+    finally:
+        return coin_download_dates
 
 
 def date_2_search(date_string):
@@ -170,5 +176,5 @@ def download_exchanges(input_coins):
 if __name__ == "__main__":
     all_coins_list = get_coin_list()
     coin_last_downloaded_date = build_start_date()
-    download_exchanges(all_coins_list)
     download_history(all_coins_list)
+    download_exchanges(all_coins_list)
