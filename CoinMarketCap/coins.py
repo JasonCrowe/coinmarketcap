@@ -7,7 +7,7 @@ engine = create_engine('sqlite:///coinmarketcap.db')
 def kelly_index(close_values):
     # data = self.history[['Date', 'Close']].sort_values(by=['Date'])
     # data = self.history.sort_values(by=['Date'],ascending=False)
-    data = close_values
+    # data = close_values
     # print data
     # data = data['Close']
 
@@ -63,7 +63,7 @@ def kelly_index(close_values):
 
 
 def close_dates():
-    q = "select distinct Coin, Date, Close from history order by Date desc"
+    q = "select distinct Coin, Date, Close from history order by Date" #   desc"
     df = pd.read_sql(q, engine, parse_dates=['Date'])
     return df
 

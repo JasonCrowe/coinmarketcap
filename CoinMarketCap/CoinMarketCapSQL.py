@@ -59,9 +59,9 @@ def get_exchange_data(input_coin):
     data = list()
     for row in table.find_all('tr')[1:]:
         cells = row.find_all('td')
-        # print [cells[1].get_text(), input_coin]
-        data.append((cells[1].get_text(), input_coin))
-    return data
+        data.append([cells[1].get_text(), input_coin])
+    e_df = pd.DataFrame(data)
+    return e_df
 
 
 def get_coin_historical_data(input_coin):
@@ -160,19 +160,22 @@ def download_history(input_coins):
 
 def download_exchanges(input_coins):
     exchange_list = [get_exchange_data(coin) for coin in input_coins]
-    merged_df = pd.DataFrame(exchange_list)
+    merged_df = pd.concat(exchange_list)
+    merged_df.columns = ['Exchange', 'Coin']
     merged_df.drop_duplicates(inplace=True)
-    # todo fix this
     print merged_df
-    # merged_df.to_sql('exchanges', engine, if_exists='replace', index=False)
+    merged_df.to_sql('exchanges', engine, if_exists='replace', index=False)
 
 
 if __name__ == "__main__":
     all_coins_list = get_coin_list()
     coin_last_downloaded_date = build_start_date()
 
-    if raw_input("Download Exchanges? y/n: ") == 'y':
-        download_exchanges(all_coins_list)
+    # if raw_input("Download Exchanges? y/n: ") == 'y':
+    #     download_exchanges(all_coins_list)
+    #
+    # if raw_input("Download History? y/n: ") == 'y':
+    #     download_history(all_coins_list)
 
-    if raw_input("Download History? y/n: ") == 'y':
-        download_history(all_coins_list)
+    download_exchanges(all_coins_list)
+    download_history(all_coins_list)
