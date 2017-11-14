@@ -9,7 +9,6 @@ from time import sleep
 
 engine = create_engine('sqlite:///coinmarketcap.db')
 BASE = 'https://coinmarketcap.com'
-history_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Market_Cap', 'Coin']
 ignore_coins = ['mergecoin']
 
 
@@ -151,6 +150,7 @@ def date_2_search(date_string):
 
 
 def download_history(input_coins):
+    history_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Market_Cap', 'Coin']
     for coin in input_coins:
         coin_history = get_coin_historical_data(coin)
         if coin_history is not None:
@@ -170,12 +170,5 @@ def download_exchanges(input_coins):
 if __name__ == "__main__":
     all_coins_list = get_coin_list()
     coin_last_downloaded_date = build_start_date()
-
-    # if raw_input("Download Exchanges? y/n: ") == 'y':
-    #     download_exchanges(all_coins_list)
-    #
-    # if raw_input("Download History? y/n: ") == 'y':
-    #     download_history(all_coins_list)
-
     download_exchanges(all_coins_list)
     download_history(all_coins_list)
