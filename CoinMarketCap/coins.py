@@ -64,6 +64,7 @@ def kelly_index(close_values):
 
 def close_dates():
     q = "select distinct Coin, Date, Close from history order by Date" #   desc"
+    #  Not sure which direction produces the correct results (descending or ascending)
     df = pd.read_sql(q, engine, parse_dates=['Date'])
     return df
 
