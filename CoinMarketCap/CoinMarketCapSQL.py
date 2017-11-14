@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 # from sqlalchemy import MetaData, Table, String, Integer, Float, Column, Date
 import pandas as pd
 from datetime import datetime, timedelta
-from time import strftime, gmtime
+# from time import strftime
 from bs4 import BeautifulSoup
 import requests
 from time import sleep
@@ -37,6 +37,8 @@ def get_coin_list():
     bs = get_parsed_page(coin_url)
     coin_table = bs.find('table', attrs={'id': 'currencies-all'})
     links_to_coins = []
+
+    print("Downloading Coin List")
     for row in coin_table.find_all('tr')[1:]:  # Let's skip the headers.
         cells = row.find_all('td')
         link_to_coin = 'https://coinmarketcap.com{}'.format(
@@ -57,10 +59,9 @@ def get_exchange_data(input_coin):
     data = list()
     for row in table.find_all('tr')[1:]:
         cells = row.find_all('td')
-        print [cells[1].get_text(), input_coin]
-        df_part = pd.DataFrame([cells[1].get_text(), input_coin])
-        data.append(df_part)
-    return pd.concat(data)
+        # print [cells[1].get_text(), input_coin]
+        data.append((cells[1].get_text(), input_coin))
+    return data
 
 
 def get_coin_historical_data(input_coin):
@@ -75,7 +76,7 @@ def get_coin_historical_data(input_coin):
     print history_url
 
     if start_date != datetime.today().strftime("%Y%m%d"):
-        print('{}: Downloading coin historical data: {}'.format(strftime("%H:%M:%S", gmtime()), input_coin))
+        print('Downloading coin historical data: {}'.format(input_coin))
         bs = get_parsed_page(history_url)
 
         table = bs.find('table', attrs={'class': 'table'})
@@ -159,9 +160,11 @@ def download_history(input_coins):
 
 def download_exchanges(input_coins):
     exchange_list = [get_exchange_data(coin) for coin in input_coins]
-    merged_df = pd.concat(exchange_list)
+    merged_df = pd.DataFrame(exchange_list)
     merged_df.drop_duplicates(inplace=True)
-    merged_df.to_sql('exchanges', engine, if_exists='replace', index=False)
+    # todo fix this
+    print merged_df
+    # merged_df.to_sql('exchanges', engine, if_exists='replace', index=False)
 
 
 if __name__ == "__main__":
