@@ -1,6 +1,4 @@
-# coinmarketcap
-## URLS
-http://coinmarketcap.com
+# coinmarketcap (http://coinmarketcap.com)
 Files & what they do...
 
 ## coinmarketcap.db
